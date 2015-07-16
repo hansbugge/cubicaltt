@@ -217,9 +217,10 @@ eval' b rho v = case v of
   CompElem a es u us  -> compElem (eval' b rho a) (evalSystem rho es) (eval' b rho u)
                                   (evalSystem rho us)
   ElimComp a es u     -> elimComp (eval' b rho a) (evalSystem rho es) (eval' b rho u)
-  Later xi t          -> VLater (Ter t (pushDelSubst (evalDelSubst rho xi) rho))
-  Next xi t           -> VNext  (Ter t (pushDelSubst (evalDelSubst rho xi) rho))
-  Fix a t             -> app b (eval' b rho t) (VNext (Ter (Fix a t) rho))
+  Later xi t          -> VLater (eval (pushDelSubst (evalDelSubst rho xi) rho) t)
+  Next xi t           -> VNext  (eval (pushDelSubst (evalDelSubst rho xi) rho) t)
+  Fix a t  | b           -> app b (eval' b rho t) (VNext (VFix (eval rho a) (eval rho t)))
+           | otherwise -> app b (eval' b rho t) (VNext (Ter (Fix a t) rho))
   _                   -> error $ "Cannot evaluate " ++ show v
 
 eval :: Env -> Ter -> Val
@@ -1068,8 +1069,15 @@ instance Convertible Val where
         conv ns (a,es,u,us) (a',es',u',us')
       (VElimComp a es u,VElimComp a' es' u') -> conv ns (a,es,u) (a',es',u')
       (Ter (Var i) e,Ter (Var i') e') -> conv ns (lookDel i e) (lookDel i' e')
-      (VLater (Ter t rho), VLater (Ter t' rho')) -> maybe False (\ c -> convEnv ns c rho rho') (alpha t t')
-      (VNext (Ter t rho), VNext (Ter t' rho')) -> maybe False (\ c -> convEnv ns c rho rho') (alpha t t')
+      (VLater v,VLater v') -> conv ns v v'
+      (VNext v,VNext v') -> conv ns v v'
+      (VFix va vf, VFix va' vf') -> conv ns (va,vf) (va',vf')
+      (Ter t@(Fix _ _) e, v) -> conv ns (eval e t) v
+      (v,Ter t@(Fix _ _) e) -> conv ns v (eval e t)
+
+      -- (VLater (Ter t rho), VLater (Ter t' rho')) -> maybe False (\ c -> convEnv ns c rho rho') (alpha t t')
+      -- (VLater v, VLater (Ter t' rho')) -> maybe False (\ c -> convEnv ns c rho rho') (alpha t t')
+      -- (VNext (Ter t rho), VNext (Ter t' rho')) -> maybe False (\ c -> convEnv ns c rho rho') (alpha t t')
       -- (VNext v, u) -> let x = "$x" in alpha ns Map.empty Map.empty v (Ter (Var x) (delUpd (x,u) empty))
       -- (u, VNext v) -> let x = "$x" in alpha ns Map.empty Map.empty v (Ter (Var x) (delUpd (x,u) empty))
       _                         -> False

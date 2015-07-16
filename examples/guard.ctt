@@ -55,8 +55,8 @@ app (A : U) (B : A -> U) (F : |> ((x : A) -> B x)) (T : |> A) : |> [ (t : A) <- 
 
 
 test_del_app_simple (A : U) (B : U) (f : |> (A -> B)) (a : |> A) : |> B
-  = next [ (f' : A -> B) <- f, (a' : A) <- a ] f' a'
---  = app A (\ (_ : A) -> B) f a
+--  = next [ (f' : A -> B) <- f, (a' : A) <- a ] f' a'
+  = app A (\ (_ : A) -> B) f a
 
 
 test_dep_app2 (A : U) (B : A -> U) (f : |> ((x : A) -> B x)) (a : |> A) 
@@ -87,15 +87,21 @@ idL (A : U) : |> (A -> A)
 Str (A : U) : U
   = fix (U) (F A)
 
--- cast (f : (|> U) -> U) (x : |> fix U f) : |> (f (next (fix U f)))
---   = x
+Strunfold (A : U) : IdP (<_> U) (|> Str A) (|> (x : A) * (Str A))
+  = undefined
 
 zeros : Str nat
   = fix (Str nat) (\ (x : |> Str nat) -> (zero , x))
+
 {-
+-- cast (f : (|> U) -> U) (x : |> fix U f) : |> (f (next (fix U f)))
+--   = x
+
 map (A : U) (B : U) (f : A -> B) : Str A -> Str B
   = fix (Str A -> Str B) (\ (x : |> (Str A -> Str B)) (as : Str A) ->
-      ((f as.1) , (x <*> as.2)))
+      ((f as.1) , (app (Str A) (\ (_ : Str A) -> Str B) x (as.2))))
+
+
 
 ones : Str nat
   = map nat nat (\ (n : nat) -> suc n) zeros
