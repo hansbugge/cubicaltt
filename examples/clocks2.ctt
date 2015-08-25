@@ -71,12 +71,17 @@ iunfold (A : U) : forall k, (f : |> k (A -> U) -> A -> U) -> (x : A)
 --  = [ k ] \ (f : |> k U -> U) (x : later $ k (dfix k U f)) -> transport (<i> later $ k (dfixeq U $ k f @ -i)) x
 
 unfoldfold k (f : |> k U -> U) (x : |> k (fix' U $ k f)) : IdP (<i> |> k (fix' U $ k f)) x (unfold $ k f (fold $ k f x))
-  = (<i> comp (<j> q @ (i /\ -j)) (comp (<j> q @ (i /\ j)) x [(i=0) -> <_> x]) [(i=0) -> <_> x]) 
+  = <i> comp (<j> q @ (i /\ -j)) (comp (<j> q @ (i /\ j)) x [(i=0) -> <_> x]) [(i=0) -> <_> x]
    where
      q : IdP (<i> U) (later $ k (next k (f (dfix k U f)))) (later $ k (dfix k U f)) = <i> later $ k (dfixeq U $ k f @ i)
 
+foldunfold k (f : |> k U -> U) (x : later $ k (dfix k U f)) : IdP (<i> later $ k (dfix k U f)) x (fold $ k f (unfold $ k f x))
+ = <i> comp (<j> q @ (i /\ -j)) (comp (<j> q @ (i /\ j)) x [(i=0) -> <_> x]) [(i=0) -> <_> x]
+   where
+     q : IdP (<i> U) (later $ k (dfix k U f)) (later $ k (next k (f (dfix k U f)))) = <i> later $ k (dfixeq U $ k f @ -i)
+
 ghd (A : U) k : (Stream A $ k) -> A
-  = split 
+  = split
      Cons xs -> xs.1
 
 gtl (A : U) k : (Stream A $ k) -> |> k (Stream A $ k)
@@ -84,13 +89,13 @@ gtl (A : U) k : (Stream A $ k) -> |> k (Stream A $ k)
       Cons x -> next k [ z <- (unfold $ k (StreamF A $ k) (x.2)) ] (Cons z) []
 
 tail (A : U) (xs : forall k, (Stream A $ k)) : (forall k, (Stream A $ k))
-  = prev k (gtl A $ k (xs $ k))
+  = [ k ] Cons ((prev k ((deCons A $ k (xs $ k)).2)) $ k)
 
 head (A : U) (xs : forall k, Stream A $ k) : forall k, A
   = [ k ] ghd A $ k (xs $ k)
 
 units : forall k, Stream Unit $ k
-  = [ k ] fix k units (Stream Unit $ k) (Cons (unit , (fold $ k (StreamF Unit $ k) (next k [ units' <- units ] (deCons Unit $ k units') [])  )))
+  = [ k ] fix k units (Stream Unit $ k) (Cons (unit , (fold $ k (StreamF Unit $ k) (next k [ units' <- units ] (deCons Unit $ k units') []))))
 
 snd : forall k, Unit
  = head Unit (tail Unit (tail Unit units))
@@ -124,11 +129,27 @@ desup (S : U) (P : S -> U) : M S P -> forall k, gM S P $ k
   = split
       sup x -> x
 
-gcons (S : U) (P : S -> U) k (s : S) (t : P s -> gM S P $ k) : gM S P $ k
-  = (s , (\ (p : P s) -> fold $ k (gMF S P $ k) (next k (t p))))
+lemmaprev (f : forall k, |> k U -> U) (b : forall k, later $ k (dfix k U (f $ k))) k
+       : Id (|> k (fix' U $ k (f $ k))) (unfold $ k (f $ k) (b $ k)) (next k ((prev k' (b $ k')) $ k))
+  = <i> next k [] (fill (<_> f $ k (dfix k U (f $ k))) ((prev k' (b $ k')) $ k) [] @ -i)
+             [ (i=0) -> (unfold $ k (f $ k) (b $ k))
+             , (i=1) -> (next k ((prev k' (b $ k')) $ k)) ]
+
+gcons (S : U) (P : S -> U) k (s : S) (t : P s -> |> k gM S P $ k) : gM S P $ k
+  = (s , (\ (p : P s) -> fold $ k (gMF S P $ k) (t p)))
+
+gh (S : U) (P : S -> U) k (m : gM S P $ k) : S
+  = m.1
+
+gt (S : U) (P : S -> U) k (m : gM S P $ k) (p : P (gh S P $ k m)) : |> k (gM S P $ k)
+  = unfold $ k (gMF S P $ k) (m.2 p)
+
+etagM (S : U) (P : S -> U) k : (m : gM S P $ k) -> Id (gM S P $ k) m (gcons S P $ k (gh S P $ k m) (gt S P $ k m))
+  = fix k etagM ((m : gM S P $ k) -> Id (gM S P $ k) m (gcons S P $ k (gh S P $ k m) (gt S P $ k m)))
+        (\ (m : gM S P $ k) -> <i> (m.1,\ (p : P m.1) -> foldunfold $ k (gMF S P $ k) (m.2 p) @ i))
 
 cons (S : U) (P : S -> U) (s : forall k , S) (t : (forall k , P (s $ k)) -> M S P) : M S P
-  = sup ([ k ] (s $ k , \ (p : P (s $ k)) -> (fold $ k (gMF S P $ k) (next k (desup S P (t ([ k' ] p)) $ k)))))
+  = sup ([ k ] gcons S P $ k (s $ k) (\ (p : P (s $ k)) -> next k (desup S P (t ([ k ] p)) $ k)))
 
 sh (S : U) (P : S -> U) : M S P -> forall k, S
   = split
@@ -138,7 +159,8 @@ st (S : U) (P : S -> U) : (xs : M S P) -> (forall k, P (sh S P xs $ k)) -> M S P
   = split
     sup x -> \ (p : forall k, P (sh S P (sup x) $ k)) -> sup (prev k ((x $ k).2 (p $ k)))
 
+
 etaM (S : U) (P : S -> U) : (xs : M S P) -> Id (M S P) xs (cons S P (sh S P xs) (st S P xs))
-  = undefined 
--- split
---       sup x -> <i> sup ([ k ] ( (x $ k).1 , \ (p : P ((x$k).1)) -> ?))
+  = split
+       sup x -> <i> sup ([ k ] (comp (<_> gM S P $ k) (etagM S P $ k (x $ k) @ i) [ (i=0) -> <_> x $ k, 
+                    (i=1) -> <j> ((x$k).1, \ (p : P (x$k).1) -> fold $ k (gMF S P $ k) (lemmaprev ([ k ] gMF S P $ k) ([ k ] (x $ k).2 p) $ k @ j)) ]))

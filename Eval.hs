@@ -1239,6 +1239,10 @@ instance Normal Val where
     VAppFormula u phi   -> VAppFormula (normal ns u) (normal ns phi)
     VNext l k v s       -> VNext l k (normal ns v) (normal ns s)
     VLater l k v        -> VLater l k (normal ns v)
+    VForall k v         -> VForall k (normal ns v)
+    VCLam k v           -> VCLam k (normal ns v)
+    VPrev k v           -> VPrev k (normal ns v)
+    VCApp v k           -> VCApp (normal ns v) k
     _                   -> v
 
 instance (Normal a, Normal b) => Normal (Either a b) where

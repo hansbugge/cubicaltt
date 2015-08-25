@@ -36,6 +36,15 @@ nth (A : U) (xs : Str A) : (n : nat) -> A
 zeros : Str nat
   = [ k ] fix k zeros (gStr nat $ k) (Cons zero zeros)
 
+zeros' : Str nat
+  = [ k ] fix k zeros' (gStr nat $ k) (Cons zero (next k (Cons zero zeros')))
+
+proof k : Id (gStr nat $ k) (zeros $ k) (zeros' $ k)
+  = fix k (<i>
+     Cons zero (next k [ (x' : gStr nat $ k) <- gtl nat $ k (zeros' $ k) ]
+                       (Cons zero (next k [ p' <- proof ] (p' @ i) [ (i=0) -> gtl nat $ k (zeros $ k), (i=1) -> gtl nat $ k x' ] ))
+                       [ (i = 0) -> gtl nat $ k (zeros $ k), (i=1) -> gtl nat $ k (zeros' $ k)]))
+
 nats : Str nat
   = [ k ] nats' $ k zero
     where
@@ -111,12 +120,7 @@ plustwo (n : nat) : nat = suc (suc n)
 lemma1 k : (n : nat) -> Id (gStr nat $ k)
   (iterate $ k plusone n)
   (ginterleave nat $ k (iterate $ k plustwo n) (next k (iterate $ k plustwo (suc n))))
-  = fix k lemma1
-    ((n : nat) -> Id (gStr nat $ k)
-      (iterate $ k plusone n)
-      (ginterleave nat $ k
-        (iterate $ k plustwo n)
-        (next k (iterate $ k plustwo (suc n)))))
+  = fix k
     (\ (n:nat) ->
        <i> Cons n
          (next k [l <- lemma1] (l (suc n) @ i)
