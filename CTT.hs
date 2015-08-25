@@ -111,8 +111,8 @@ data Ter = App Ter Ter
          | Glue Ter (System Ter)
          | GlueElem Ter (System Ter)
            -- guarded recursive types
-         | Later Clock DelSubst Ter
-         | Next Clock DelSubst Ter (System Ter)
+         | Later Loc Clock DelSubst Ter
+         | Next Loc Clock DelSubst Ter (System Ter)
          | DFix Clock Ter Ter
          | Prev Clock Ter
          | CLam Clock Ter
@@ -130,7 +130,7 @@ newtype DelBind' a t = DelBind (Ident,(a,t))
 
 type DelBind = DelBind' (Maybe Ter) Ter
 type DelSubst = [DelBind]
-type VDelSubst = [DelBind' Val Val]
+type VDelSubst = [DelBind' () Val]
 
 lookDS :: Ident -> DelSubst -> Maybe Ter
 lookDS x = fmap (\ (DelBind (_,(_,t))) -> t) . find (\ (DelBind (y,(_,t))) -> x == y)
@@ -249,7 +249,7 @@ data Ctxt = Empty
           -- | DelUpd Ident Ctxt -- Delayed Substitution update.
   deriving (Show,Eq)
 
-newtype Thunk = Thunk { unThunk :: Either Val (Tag,Val,Val) } deriving (Eq,Show)
+newtype Thunk = Thunk { unThunk :: Either Val (Tag,(),Val) } deriving (Eq,Show)
 
 -- The Idents and Names in the Ctxt refer to the elements in the two
 -- lists. This is more efficient because acting on an environment now
@@ -275,8 +275,8 @@ subk (k,k') (rho,vs,fs,ws) = (SubK k rho,vs,fs,k':ws)
 upd :: (Ident,Val) -> Env -> Env
 upd (x,v) (rho,vs,fs,ws) = (Upd x rho,Thunk (Left v):vs,fs,ws)
 
-delUpd :: (Ident,(Tag,Val,Val)) -> Env -> Env
-delUpd (x,w) (rho,vs,fs,ws) = (Upd x rho,Thunk (Right w):vs,fs,ws)
+delUpd :: (Ident,(Tag,(),Val)) -> Env -> Env
+delUpd (x,(t,_,v)) (rho,vs,fs,ws) = (Upd x rho,Thunk (Right (t,(),v)):vs,fs,ws)
 
 updT :: (Ident,Thunk) -> Env -> Env
 updT (x,t) (rho,vs,fs,ws) = (Upd x rho,t:vs,fs,ws)
@@ -397,8 +397,8 @@ showTer v = case v of
   Glue a ts          -> text "glue" <+> showTer1 a <+> text (showSystem ts)
   GlueElem a ts      -> text "glueElem" <+> showTer1 a <+> text (showSystem ts)
 
-  Later k ds t         -> text "|>" <+> showClock k <+> (if null ds then mempty else showDelSubst ds) <+> showTer t
-  Next k ds t s        -> text "next" <+> showClock k <+> (if null ds then mempty else showDelSubst ds) <+> showTer1 t <+> text (showSystem s)
+  Later l k ds t         -> text "|>" <+> showClock k <+> (if null ds then mempty else showDelSubst ds) <+> showTer t
+  Next l k ds t s        -> text "next" <+> showClock k <+> (if null ds then mempty else showDelSubst ds) <+> showTer1 t <+> text (showSystem s)
   DFix k a t           -> text "dfix" <+> showClock k <+> {-showTer1 a <+>-} showTer1 t
   Prev k v         -> text "prev" <+> showClock k <+> showTer v
   Forall k v       -> text "forall" <+> showClock k <+> text "," <+> showTer v

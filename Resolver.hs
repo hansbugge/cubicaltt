@@ -132,6 +132,9 @@ insertAIdents  = flip $ foldr insertAIdent
 getLoc :: (Int,Int) -> Resolver Loc
 getLoc l = Loc <$> asks envModule <*> pure l
 
+getLoc' :: AIdent -> Resolver Loc
+getLoc' (AIdent (l,x)) = getLoc l
+
 unAIdent :: AIdent -> Ident
 unAIdent (AIdent (_,x)) = x
 
@@ -259,12 +262,14 @@ resolveExp e = case e of
   Later k ds t -> do
     k' <- resolveClock k
     (rds,names) <- resolveDelSubst ds
-    CTT.Later k' rds <$> local (insertIdents names) (resolveExp t)
+    l <- getLoc' k
+    CTT.Later  l k' rds <$> local (insertIdents names) (resolveExp t)
   LaterEmp k t -> resolveExp (Later k (DelSubst []) t)
   Next k ds t sys -> do
     k' <- resolveClock k
     (rds,names) <- resolveDelSubst ds
-    CTT.Next k' rds <$> local (insertIdents names) (resolveExp t) <*> resolveSystem sys
+    l <- getLoc' k
+    CTT.Next l k' rds <$> local (insertIdents names) (resolveExp t) <*> resolveSystem sys
   NextEmp k t -> resolveExp (Next k (DelSubst []) t (System []))
   DFix k a t -> CTT.DFix <$> resolveClock k <*> resolveExp a <*> resolveExp t
   Prev k t -> prev k (resolveExp t)

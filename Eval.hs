@@ -470,8 +470,12 @@ eval rho v = case v of
     fillLine (eval rho a) (eval rho t0) (evalSystem rho ts)
   Glue a ts           -> glue (eval rho a) (evalSystem rho ts)
   GlueElem a ts       -> glueElem (eval rho a) (evalSystem rho ts)
-  Later k xi t        -> let l = fresht rho in VLater l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t)
-  Next k xi t s       -> let l = fresht rho in next l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t) (evalSystem rho s)
+  Later _ k xi t | Data.List.null xi -> let l = fresht rho in VLater l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t)
+                 | otherwise -> Ter v rho
+  Next _ k xi t s  | Just u <- maybeProj (evalSystem rho s) -> u
+                   | Data.List.null xi -> let l = fresht rho in
+                      next l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t) (evalSystem rho s)
+                   | otherwise -> Ter v rho
   DFix k a t          -> VDFix (lookClock k rho) (eval rho a) (eval rho t)
   Prev k t            -> let k' = freshk rho
                          in prev k' (eval (subk (k,k') rho) t)
@@ -525,7 +529,7 @@ actk = act
 
 advThunk :: Tag -> Clock -> Thunk -> Thunk
 advThunk l k (Thunk (Right (l',a,v))) | l == l' = Thunk $ Left $ prev k v `appk` k
-                                      | otherwise = forceThunk $ (Thunk (Right (l', adv l k a, adv l k v)))
+                                      | otherwise = forceThunk $ (Thunk (Right (l', () {-adv l k a-}, adv l k v)))
 advThunk l k (Thunk (Left v)) = Thunk $ Left $ adv l k v
 
 advEnv :: Tag -> Clock -> Env -> Env
@@ -570,28 +574,34 @@ adv l k u =
          VForall k v             -> VForall k (advlk v)
 
 
-
+-- [1 |-> u] --> Just u
+maybeProj :: System Val -> Maybe Val
+maybeProj vs | eps `member` vs = Just (vs ! eps)
+             | otherwise = Nothing
 next :: Tag -> Clock -> Val -> System Val -> Val
-next l k v vs | eps `member` vs = vs ! eps
-next l k v vs | otherwise       = VNext l k v vs
+next l k v vs = maybe (VNext l k v vs) id (maybeProj vs)
+--next l k v vs | otherwise       = VNext l k v vs
 
 advs :: Clock -> VDelSubst -> [(Ident,Val)]
 advs k [] = []
 advs k (DelBind (f,(_,v)) : vds) = (f,prev k v `appk` k) : advs k vds
 
 prev :: Clock -> Val -> Val
-prev k (VNext l k' v _) | k == k'   = VCLam k (adv l k v)
+prev k v = prev' k (forceN v)
+
+prev' :: Clock -> Val -> Val
+prev' k (VNext l k' v _) | k == k'   = VCLam k (adv l k v)
                         | otherwise = error $ "prev: clocks do not match"
-prev k t@(VDFix k' a f) | k == k' = VCLam k' (f `app` t)
+prev' k t@(VDFix k' a f) | k == k' = VCLam k' (f `app` t)
                         | otherwise = error $ "prev: clocks do not match"
-prev k t@(Ter (Var x) _) = error $ "prev: closure " ++ show t
-prev k u@(VComp (VPath i (VLater l k' a)) v ts) | k == k' = comp j (VForall k (adv l k aj)) (prev k vj) (Map.map (\ t -> prev k (t @@ j)) ts)
-    | otherwise = error $ "prev: clocks do not match"
+prev' k t@(Ter (Var x) _) = error $ "prev: closure " ++ show t
+prev' k u@(VComp (VPath i (VLater l k' a)) v ts) | k == k' = comp j (VForall k (adv l k aj)) (prev' k vj) (Map.map (\ t -> prev' k (t @@ j)) ts)
+    | otherwise = error $ "prev': clocks do not match"
   where
     j = fresh u
     (aj,vj) = (a,v) `swap` (i,j)
-prev k t | isNeutral t = VPrev k t
-prev k t               = error $ "prev: not neutral " ++ show t
+prev' k t | isNeutral t = VPrev k t
+prev' k t               = error $ "prev: not neutral " ++ show t
 
 appk :: Val -> Clock -> Val
 appk (VCLam k v) k' = v `actk` (k,k')
@@ -614,16 +624,25 @@ evalDelSubst l rho ds = case ds of
   []                        -> []
   (DelBind (f,(a',t)):ds')   -> let vds' = evalDelSubst l rho ds'
                                     v = eval rho t
-                                    ia = case inferType v of
-                                           VLater l' k va -> va `act` (l',l)
-                                    a = maybe ia (eval (pushDelSubst l vds' rho)) a'
+                                    -- ia = case inferType v of
+                                    --        VLater l' k va -> va `act` (l',l)
+                                    -- a = maybe ia (eval (pushDelSubst l vds' rho)) a'
                                 in
-                                    DelBind (f, (a, v)) : vds'
+                                    DelBind (f, ((), v)) : vds'
 
+forceN :: Val -> Val
+forceN (Ter (Next _ k xi e s) rho) = let l = fresht rho in
+     next l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) e) (evalSystem rho s)
+forceN v = v
 
 maybeForce :: Tag -> Val -> Maybe Val
-maybeForce t (VNext l _ v s) | Map.null s = Just (v `act` (l,t))
-maybeForce t _ = Nothing
+maybeForce t (Ter (Next _ k xi e s) rho) = let l = fresht rho in
+  maybeForce' t $ next l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) e) (evalSystem rho s)
+maybeForce t v = maybeForce' t v
+
+maybeForce' :: Tag -> Val -> Maybe Val
+maybeForce' t (VNext l _ v s) | Map.null s = Just (v `act` (l,t))
+maybeForce' t _ = Nothing
 
 forceThunk :: Thunk -> Thunk
 forceThunk (Thunk t) = Thunk $ case t of
@@ -634,7 +653,7 @@ forceThunk (Thunk t) = Thunk $ case t of
 pushDelSubst :: Tag -> VDelSubst -> Env -> Env
 pushDelSubst t []                       rho = rho
 pushDelSubst t (DelBind (f,(va,vt)):ds) rho =
-   updT (f, forceThunk $ Thunk $ Right (t,va,vt)) (pushDelSubst t ds rho)
+   updT (f, forceThunk $ Thunk $ Right (t,(),vt)) (pushDelSubst t ds rho)
 
 evals :: Env -> [(Ident,Ter)] -> [(Ident,Val)]
 evals env bts = [ (b,eval env t) | (b,t) <- bts ]
@@ -1081,6 +1100,8 @@ instance Convertible Val where
       (u',Ter (Lam x a u) e) ->
         let v@(VVar n _) = mkVarNice ns x (eval e a)
         in conv (n:ns) (app u' v) (eval (upd (x,v) e) u)
+      (Ter (Next p _ _ _ _) e,Ter (Next p' _ _ _ _) e') -> (p == p') && conv ns e e'
+      (Ter (Later p _ _ _) e,Ter (Later p' _ _ _) e') -> (p == p') && conv ns e e'
       (Ter (Split _ p _ _) e,Ter (Split _ p' _ _) e') -> (p == p') && conv ns e e'
       (Ter (Sum p _ _) e,Ter (Sum p' _ _) e')         -> (p == p') && conv ns e e'
       (Ter (HSum p _ _) e,Ter (HSum p' _ _) e')       -> (p == p') && conv ns e e'
@@ -1247,7 +1268,8 @@ instance Normal Val where
 
 instance (Normal a, Normal b) => Normal (Either a b) where
   normal ns = either (Left . normal ns) (Right . normal ns)
-
+instance Normal () where
+  normal ns = id
 instance Normal Thunk where
   normal ns (Thunk t) = Thunk $ normal ns t
 instance Normal Tag where

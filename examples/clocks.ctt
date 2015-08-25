@@ -5,10 +5,10 @@ later k :|> k U -> U
   = (\ (A : |> k U) -> |> k [ (a : U) <- A ] a)
 
 app (A : U) (B : A -> U) : forall k, (F : |> k ((x : A) -> B x)) (X : |> k A) -> |> k [ (x : A) <- X ] (B x)
- = [ k ] \ (F : |> k ((x : A) -> B x)) (X : |> k A) -> next k [ (x : A) <- X, (f : ((x : A) -> B x)) <- F ] (f x) []
+  = [ k ] \ (F : |> k ((x : A) -> B x)) (X : |> k A) -> next k [ (x : A) <- X, (f : ((x : A) -> B x)) <- F ] (f x) []
 
 app' (A : U) (B : U) : forall k, (F : |> k ((x : A) -> B)) (X : |> k A) -> |> k B
- = app A (\ (_ : A) -> B)
+  = app A (\ (_ : A) -> B)
 
 fix' (A : U) : forall k, (|> k A -> A) -> A
   = [ k ] (\ (f : |> k A -> A) -> f (dfix k A f))

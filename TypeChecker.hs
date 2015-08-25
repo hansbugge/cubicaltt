@@ -86,8 +86,8 @@ addBranch nvs env (TEnv ns ind rho v c) =
 addDecls :: [Decl] -> TEnv -> TEnv
 addDecls d (TEnv ns ind rho v c) = TEnv ns ind (def d rho) v (Map.fromList [ (x,eval (def d rho) a) | (x,(a,_)) <- d ] `Map.union` c)
 
-addDelDecls :: Tag -> VDelSubst -> TEnv -> TEnv
-addDelDecls t ds (TEnv ns ind rho v c) = TEnv ns ind rho' v (Map.fromList [ (x,a) | DelBind (x,(a,_)) <- ds ] `Map.union` c)
+addDelDecls :: Tag -> VDelSubst -> [(Ident,Val)] -> TEnv -> TEnv
+addDelDecls t ds xas (TEnv ns ind rho v c) = TEnv ns ind rho' v (Map.fromList xas `Map.union` c)
   where rho' = pushDelSubst t ds rho
 
 addTele :: Tele -> TEnv -> TEnv
@@ -134,6 +134,10 @@ evalTypingDelSubst l t = evalDelSubst l <$> asks env <*> pure t
 
 -------------------------------------------------------------------------------
 -- | The bidirectional type checker
+
+forceT :: Val -> Val
+forceT (Ter (Later _ k xi t) rho) = let l = fresht rho in VLater l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t)
+forceT v  = v
 
 -- Check that t has type a
 check :: Val -> Ter -> Typing ()
@@ -221,13 +225,13 @@ check a t = case (a,t) of
     check va u
     vu <- evalTyping u
     checkGlueElem vu ts us
-  (VU, Later k xi a) -> do
+  (VU, Later _ k xi a) -> do
     rho <- asks env
     let l = fresht rho
 --        k' = lookClock k rho
-    _g' <- checkDelSubst l k xi
+    g <- checkDelSubst l k xi
     vxi <- evalTypingDelSubst l xi
-    local (addDelDecls l vxi) $ check VU a
+    local (addDelDecls l vxi g) $ check VU a
   (VU, Forall k a) -> do
     rho <- asks env
     local (addSubk (k,freshk rho)) $ check VU a
@@ -235,23 +239,24 @@ check a t = case (a,t) of
     rho <- asks env
     let k' = freshk (va,rho)
     local (addSubk (kt,k')) $ check (act va (k,k')) t'
-  (VLater _ k va, Next kt xi t' s) -> do
+  (_, Next _ kt xi t' s) | VLater _ k va <- forceT a -> do
     rho <- asks env
     ns <- asks names
     let k' = lookClock kt rho
     unless (k == k') $
       throwError $ "clocks do not match:\n" ++ show a ++ " " ++ show t
     let l = fresht (rho,va)
-    _g' <- checkDelSubst l kt xi
+    g <- checkDelSubst l kt xi
     vxi <- evalTypingDelSubst l xi
-    local (addDelDecls l vxi) $ check va t'
-    checkSystemWith s (\ alpha b -> check (a `face` alpha) b)
-    checkSystemWith s (\ alpha b -> do
-      let rho' = upds (advs k vxi) rho
-          v1    = VCLam k (eval rho' t') `face` alpha
+    local (addDelDecls l vxi g) $ check va t'
+    checkSystemWith s (\ alpha b -> {- faceEnv alpha -} check (a `face` alpha) b)
+    checkSystemWith s (\ alpha b -> {- faceEnv alpha -} do
+      let -- rho' = upds (advs k vxi) rho
+--          v1    = VCLam k (eval rho' t') `face` alpha
+          v1    = prev k (eval (rho `face` alpha) t)
           v2    = prev k (eval (rho `face` alpha) b)
       unless (conv ns v1 v2) $
-        throwError $ concat ["check next: system does not align\n",show v1,"\n\n",show v2,"\n"] )
+        throwError $ concat ["check next: system does not align\n",show (normal ns v1),"\n\n",show (normal ns v2),"\n"] )
     checkCompSystem (evalSystem rho s)
 
 
@@ -300,14 +305,15 @@ checkDelSubst l k ((DelBind (f,(a',t))) : ds) = do
   va <- case a' of
          Just a -> do
            local (\ e -> foldr addTypeVal e g) $ check VU a
-           vla <- evalTyping (Later k ds a)
-           check vla t
            vds <- evalTypingDelSubst l ds
-           local (addDelDecls l vds) $ evalTyping a
+           va <- local (addDelDecls l vds g) $ evalTyping a
+           rho <- asks env
+           check (VLater l (lookClock k rho) va) t
+           return va
          Nothing -> do
            vla <- infer t
            rho <- asks env
-           case vla of
+           case forceT vla of
              VLater l' k' w | lookClock k rho == k' -> return (w `act` (l',l))
              w -> throwError $ "checkDelSusbst: not the right later " ++ show w
   return ((f,va) : g)
@@ -488,7 +494,7 @@ infer e = case e of
     rho <- asks env
     let l = fresht (rho,va)
         k' = lookClock k rho
-    check (VPi (VLater l k' va) (Ter (Lam "_fixTy" (Later k [] a) a) rho)) t
+    check (VPi (VLater l k' va) (Ter (Lam "_fixTy" (Later (Loc { locFile = "Typechecker" , locPos = (0,0)}) k [] a) a) rho)) t
     return (VLater l k' va)
   CApp t k -> do
     rho <- asks env
@@ -501,7 +507,7 @@ infer e = case e of
     rho <- asks env
     let k = freshk rho
     c <- local (addSubk (k',k)) $ infer t
-    case c of
+    case forceT c of
        VLater l kl a | kl == k   -> return (VForall k (adv l k a))
                      | otherwise -> throwError $ show c ++ " does not match clock " ++ show k
        _                         -> throwError $ show c ++ " is not a |> type"

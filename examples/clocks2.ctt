@@ -8,8 +8,8 @@ later k :|> k U -> U
 app (A : U) (B : A -> U) : forall k, (F : |> k ((x : A) -> B x)) (X : |> k A) -> |> k [ (x : A) <- X ] (B x)
  = [ k ] \ (F : |> k ((x : A) -> B x)) (X : |> k A) -> next k [ (x : A) <- X, (f : ((x : A) -> B x)) <- F ] (f x) []
 
-app' (A : U) (B : U) : forall k, (F : |> k ((x : A) -> B)) (X : |> k A) -> |> k B
- = app A (\ (_ : A) -> B)
+app' (A : U) (B : U) k (F : |> k ((x : A) -> B)) (X : |> k A) : |> k B
+ = next k [ x <- app A (\ (_ : A) -> B) $ k F X ] x []
 
 fix' (A : U) : forall k, (|> k A -> A) -> A
   = [ k ] (\ (f : |> k A -> A) -> f (dfix k A f))
@@ -40,10 +40,11 @@ dfixeq' (A : U) k (f : |> k A -> A) : IdP (<_> |> k A) (next k (fix k phi A (f p
 		     (i=1) -> (dfix k A f) ]
 
 fold : forall k, (f : |> k U -> U) -> |> k (fix' U $ k f) -> later $ k (dfix k U f)
- = [ k ] \ (f : |> k U -> U) (x : |> k (fix' U $ k f)) -> transport (<i> later $ k (dfixeq U $ k f @ i)) x
+ = [ k ] \ (f : |> k U -> U) (x : |> k (fix' U $ k f)) -> transport (<i> later $ k (dfixeq U $ k f @ i)) (next k [x' <- x] x' [])
+
 
 unfold : forall k, (f : |> k U -> U) -> later $ k (dfix k U f) -> |> k (fix' U $ k f)
- = [ k ] \ (f : |> k U -> U) (x : later $ k (dfix k U f)) -> transport (<i> later $ k (dfixeq U $ k f @ -i)) x
+ = [ k ] \ (f : |> k U -> U) (x : later $ k (dfix k U f)) -> next k [ x' <- transport (<i> later $ k (dfixeq U $ k f @ -i)) x] x' []
 
 -- dfixeq (A : U) : forall k, (f : |> k A -> A) -> IdP (<i> |> k A) (next k (f (dfix k A f))) (dfix k A f)
 --    = [ k ] \ (f : |> k A -> A) -> <i> next k [] (f (dfix k A f)) [ (i=0) -> (next k (f (dfix k A f))), (i=1) -> (dfix k A f) ]
@@ -51,19 +52,18 @@ unfold : forall k, (f : |> k U -> U) -> later $ k (dfix k U f) -> |> k (fix' U $
 ifold (A : U) : forall k, (f : |> k (A -> U) -> A -> U) -> (x : A) 
                           -> |> k (fix' (A -> U) $ k f x) 
                           -> later $ k (next k [ (f' : A -> U) <- (dfix k (A -> U) f) ] (f' x) [])
- = [ k ] \ (f : |> k (A -> U) -> (A -> U)) (x : A) (y : |> k (fix' (A -> U) $ k f x)) -> transport 
-          (<i> later $ k (next k [ (f' : A -> U) <- (dfixeq (A -> U) $ k f @ i) ] (f' x) [])) y 
-
+ = [ k ] \ (f : |> k (A -> U) -> (A -> U)) (x : A) (y : |> k (fix' (A -> U) $ k f x)) -> next k [ z <- transport 
+          (<i> later $ k (next k [ (f' : A -> U) <- (dfixeq (A -> U) $ k f @ i) ] (f' x) [])) (next k [y' <- y] y' []) ] z []
+ 
 ifold2 (A : U) k (f : |> k (A -> U) -> A -> U) (x : |> k A)
                  (y : |> k [ x' <- x ] (fix' (A -> U) $ k f x'))
                  : |> k [ f' <- dfix k (A -> U) f, x' <- x] (f' x')
- = transport (<i> later $ k (app' A U $ k (dfixeq (A -> U) $ k f @ i) x)) y
+ = next k [ z <- transport (<i> later $ k (app' A U $ k (dfixeq (A -> U) $ k f @ i) x)) (next k [ y' <- y ] y' []) ] z []
 
-iunfold (A : U) : forall k, (f : |> k (A -> U) -> A -> U) -> (x : A)
-                          -> later $ k (next k [ (f' : A -> U) <- (dfix k (A -> U) f) ] (f' x) [])
-                          -> |> k (fix' (A -> U) $ k f x)
- = [ k ] \ (f : |> k (A -> U) -> (A -> U)) (x : A) (y : later $ k (next k [ (f' : A -> U) <- (dfix k (A -> U) f) ] (f' x) [])) -> transport 
-          (<i> later $ k (next k [ (f' : A -> U) <- (dfixeq (A -> U) $ k f @ -i) ] (f' x) [])) y
+iunfold (A : U) k (f : |> k (A -> U) -> A -> U) (x : A)
+                          (y : later $ k (next k [ (f' : A -> U) <- (dfix k (A -> U) f) ] (f' x) []))
+                          : |> k (fix' (A -> U) $ k f x)
+ = next k [ x' <- transport (<i> later $ k (next k [ (f' : A -> U) <- (dfixeq (A -> U) $ k f @ -i) ] (f' x) [])) (next k [y' <- y] y' [])] x' []
 
  -- transport (<i> later $ k (dfixeq (A -> U) $ k f @ i)) x
 
@@ -71,14 +71,16 @@ iunfold (A : U) : forall k, (f : |> k (A -> U) -> A -> U) -> (x : A)
 --  = [ k ] \ (f : |> k U -> U) (x : later $ k (dfix k U f)) -> transport (<i> later $ k (dfixeq U $ k f @ -i)) x
 
 unfoldfold k (f : |> k U -> U) (x : |> k (fix' U $ k f)) : IdP (<i> |> k (fix' U $ k f)) x (unfold $ k f (fold $ k f x))
-  = <i> comp (<j> q @ (i /\ -j)) (comp (<j> q @ (i /\ j)) x [(i=0) -> <_> x]) [(i=0) -> <_> x]
-   where
-     q : IdP (<i> U) (later $ k (next k (f (dfix k U f)))) (later $ k (dfix k U f)) = <i> later $ k (dfixeq U $ k f @ i)
+  = undefined
+   -- = <i> comp (<j> q @ (i /\ -j)) (comp (<j> q @ (i /\ j)) x [(i=0) -> <_> x]) [(i=0) -> <_> x]
+   -- where
+   --   q : IdP (<i> U) (later $ k (next k (f (dfix k U f)))) (later $ k (dfix k U f)) = <i> later $ k (dfixeq U $ k f @ i)
 
 foldunfold k (f : |> k U -> U) (x : later $ k (dfix k U f)) : IdP (<i> later $ k (dfix k U f)) x (fold $ k f (unfold $ k f x))
- = <i> comp (<j> q @ (i /\ -j)) (comp (<j> q @ (i /\ j)) x [(i=0) -> <_> x]) [(i=0) -> <_> x]
-   where
-     q : IdP (<i> U) (later $ k (dfix k U f)) (later $ k (next k (f (dfix k U f)))) = <i> later $ k (dfixeq U $ k f @ -i)
+ = undefined
+ -- = <i> comp (<j> q @ (i /\ -j)) (comp (<j> q @ (i /\ j)) x [(i=0) -> <_> x]) [(i=0) -> <_> x]
+ --   where
+ --     q : IdP (<i> U) (later $ k (dfix k U f)) (later $ k (next k (f (dfix k U f)))) = <i> later $ k (dfixeq U $ k f @ -i)
 
 ghd (A : U) k : (Stream A $ k) -> A
   = split
@@ -110,18 +112,19 @@ liftPF (A : U) (P : A -> U) k (liftP : |> k (Stream A $ k -> U)) (xs : Stream A 
 liftP (A : U) (P : A -> U) : forall k, Stream A $ k -> U
  = [ k ] fix k liftP (Stream A $ k -> U) (liftPF A P $ k liftP)
 
+{-
 liftLemma (A : U) (P : A -> U) (p : (x : A) -> P x) : forall k, (xs : Stream A $ k) -> liftP A P $ k xs
   = [ k ] fix k phi ((xs : Stream A $ k) -> liftP A P $ k xs) (\ (xs : Stream A $ k) ->
           ( p (ghd A $ k xs)
           , ifold2 (Stream A $ k) $ k (liftPF A P $ k) (gtl A $ k xs) (next k [ phi' <- phi, xs' <- gtl A $ k xs ] (phi' xs') [])
           ))
-
+-}
 
 gMF (S : U) (P : S -> U) k (gM : |> k U) : U
   = ((s : S) * (P s -> |> k [ gM' <- gM ] gM'))
 
 gM (S : U) (P : S -> U) k : U
- = fix k gM U ((s : S) * (P s -> |> k [ gM' <- gM ] gM'))
+ = fix k gM U (gMF S P $ k gM)
 
 data M (S : U) (P : S -> U) = sup (blah : forall k, gM S P $ k)
 
@@ -136,17 +139,17 @@ lemmaprev (f : forall k, |> k U -> U) (b : forall k, later $ k (dfix k U (f $ k)
              , (i=1) -> (next k ((prev k' (b $ k')) $ k)) ]
 
 gcons (S : U) (P : S -> U) k (s : S) (t : P s -> |> k gM S P $ k) : gM S P $ k
-  = (s , (\ (p : P s) -> fold $ k (gMF S P $ k) (t p)))
+  = (s , (\ (p : P s) -> next k [ x <- fold $ k (gMF S P $ k) (t p) ] x []))
 
 gh (S : U) (P : S -> U) k (m : gM S P $ k) : S
   = m.1
 
 gt (S : U) (P : S -> U) k (m : gM S P $ k) (p : P (gh S P $ k m)) : |> k (gM S P $ k)
-  = unfold $ k (gMF S P $ k) (m.2 p)
+  = unfold $ k (gMF S P $ k) (next k [ x <- m.2 p] x [])
 
 etagM (S : U) (P : S -> U) k : (m : gM S P $ k) -> Id (gM S P $ k) m (gcons S P $ k (gh S P $ k m) (gt S P $ k m))
   = fix k etagM ((m : gM S P $ k) -> Id (gM S P $ k) m (gcons S P $ k (gh S P $ k m) (gt S P $ k m)))
-        (\ (m : gM S P $ k) -> <i> (m.1,\ (p : P m.1) -> foldunfold $ k (gMF S P $ k) (m.2 p) @ i))
+        (\ (m : gM S P $ k) -> <i> (m.1,\ (p : P m.1) -> foldunfold $ k (gMF S P $ k) (next k [ x <- m.2 p] x []) @ i))
 
 cons (S : U) (P : S -> U) (s : forall k , S) (t : (forall k , P (s $ k)) -> M S P) : M S P
   = sup ([ k ] gcons S P $ k (s $ k) (\ (p : P (s $ k)) -> next k (desup S P (t ([ k ] p)) $ k)))

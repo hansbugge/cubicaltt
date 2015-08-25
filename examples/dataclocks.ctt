@@ -8,8 +8,8 @@ fix' (A : U) : forall k, (|> k A -> A) -> A
 app (A : U) (B : A -> U) : forall k, (F : |> k ((x : A) -> B x)) (X : |> k A) -> |> k [ x <- X ] (B x)
  = [ k ] \ (F : |> k ((x : A) -> B x)) (X : |> k A) -> next k [ x <- X, f <- F ] (f x) []
 
-app' (A : U) (B : U) : forall k, (F : |> k ((x : A) -> B)) (X : |> k A) -> |> k B
- = app A (\ (_ : A) -> B)
+app' (A : U) (B : U) k (F : |> k ((x : A) -> B)) (X : |> k A) : |> k B
+ = next k [ x <- app A (\ (_ : A) -> B) $ k F X ] x []
 
 dfixeq (A : U) : forall k, (f : |> k A -> A) -> IdP (<i> |> k A) (next k (f (dfix k A f))) (dfix k A f)
    = [ k ] \ (f : |> k A -> A) -> <i> next k [] (f (dfix k A f)) [ (i=0) -> (next k (f (dfix k A f))), (i=1) -> (dfix k A f) ]
@@ -68,22 +68,24 @@ case' k (A : gCoNat $ k -> U) (z : A zero) (s : (n : |> k (gCoNat $ k)) -> A (su
 -- uncons (x : CoNat) k : Maybe CoNat
 --   = case (Maybe CoNat) $ k nothing (\ (n : |> k (gCoNat $ k)) -> just ([ k' ] (suc ?))) (x $ k)
 
+laterN k (n : |> k gCoNat $ k) (F : gCoNat $ k -> U) : U
+  = |> k [ x <- n ] (F x) 
 
-data gCoVec (A : U) k (n : gCoNat $ k) = con (_ : case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * |> k [ x <- n ] (gCoVec A $ k x)) n)
+data gCoVec (A : U) k (n : gCoNat $ k) = con (_ : case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * laterN $ k n (gCoVec A $ k)) n)
 
 gCoVec' (A : U) k (n : gCoNat $ k) : U
-  = case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * |> k [ x <- n ] (gCoVec A $ k x)) n
+  = case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * laterN $ k n (gCoVec A $ k)) n
 
 
 decon (A : U) k (n : gCoNat $ k) : gCoVec A $ k n -> gCoVec' A $ k n
  = split
     con x -> x
 
-gtlv (A : U) k (n : |> k gCoNat $ k) : gCoVec A $ k (suc n) -> |> k [n' <- n] gCoVec A $ k n'
+gtlv (A : U) k (n : |> k gCoNat $ k) : gCoVec A $ k (suc n) -> laterN $ k n (gCoVec A $ k)
   = split
       con x -> x.2
 
-uncon (A : U) (B : U) k (n : gCoNat $ k) (f : case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * |> k [ x <- n ] (gCoVec A $ k x)) n -> B) :
+uncon (A : U) (B : U) k (n : gCoNat $ k) (f : case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * laterN $ k n (gCoVec A $ k)) n -> B) :
     gCoVec A $ k n -> B
   = split
      con x -> f x
@@ -101,14 +103,14 @@ uncon' (A : U) k (n : gCoNat $ k) (B : gCoVec A $ k n -> U) (f : (v : gCoVec' A 
 unitsv k : (n : gCoNat $ k) -> gCoVec Unit $ k n
   = fix k unitsv ((n : gCoNat $ k) -> gCoVec Unit $ k n)
         (case' $ k (gCoVec Unit $ k) (con unit)
-            (\ (m : |> k (gCoNat $ k)) -> con (unit , app (gCoNat $ k) (\ (x : gCoNat $ k) -> gCoVec Unit $ k x) $ k unitsv m)))
+            (\ (m : |> k (gCoNat $ k)) -> con (unit , next k [ f <- unitsv, x <- m] (f x) [])))
 
 
 map (A B : U) (f : A -> B) k : (n : gCoNat $ k) -> gCoVec A $ k n -> gCoVec B $ k n
   = fix k map ((n : gCoNat $ k) -> gCoVec A $ k n -> gCoVec B $ k n)
         (case' $ k (\ (n : gCoNat $ k) -> gCoVec A $ k n -> gCoVec B $ k n) (\ (x : gCoVec A $ k zero) -> con unit)
                   (\ (n : |> k gCoNat $ k) -> uncon A (gCoVec B $ k (suc n)) $ k (suc n)
-                        (\ (p : (_ : A) * |> k [ n' <- n ] gCoVec A $ k n') -> con (f (p.1) ,
+                        (\ (p : (_ : A) * laterN $ k n (gCoVec A $ k)) -> con (f (p.1) ,
                    next k [ map' <- map, n' <- n, xs <- p.2 ]
                           (map' n' xs) []))))
 
@@ -219,8 +221,8 @@ CoVec (A : U) (n : CoNat) : U
 kcon (A : U) (n : CoNat) (xs : forall k, gCoVec' A $ k (n $ k)) : CoVec A n
   = [ k ] (con (xs $ k))
 
-tlcv (A : U) (n : CoNat) (xs : CoVec A (csu n)) : CoVec A n
-  = kcon A n (prev k (app' (gCoVec A $ k (n $ k)) (gCoVec' A $ k (n $ k)) $ k (next k (decon A $ k (n $ k))) ((decon A $ k (csu n $ k) (xs $ k)).2)))
+-- tlcv (A : U) (n : CoNat) (xs : CoVec A (csu n)) : CoVec A n
+--   = kcon A n (prev k (app' (gCoVec A $ k (n $ k)) (gCoVec' A $ k (n $ k)) $ k (next k (decon A $ k (n $ k))) ((decon A $ k (csu n $ k) (xs $ k)).2)))
 
 kmap (A B : U) (f : A -> B) (n : CoNat) (xs : CoVec A n) : CoVec B n
   = [ k ] map A B f $ k (n $ k) (xs $ k)
@@ -254,10 +256,10 @@ goemerge (A : U) k (xs ys : Str A) : Id (gStr A $ k) (everyother A ([ k ] merge 
 oemerge (A : U) (xs ys : Str A) : Id (Str A) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k))) xs
   = <i> [ k ] goemerge A $ k xs ys @ i
 
-tlcv (A : U) (n : CoNat) (xs : CoVec A (csu n)) : CoVec A n
-  = kcon A n (prev k (uncon A (|> k (gCoVec' A $ k (n $ k))) $ k (csu n $ k)
-             (\ (xs : gCoVec' A $ k (csu n $ k)) -> next k [ x <- xs.2 ] (decon A $ k (n $ k) x) [])
-             (xs $ k)))
+-- tlcv (A : U) (n : CoNat) (xs : CoVec A (csu n)) : CoVec A n
+--   = kcon A n (prev k (uncon A (|> k (gCoVec' A $ k (n $ k))) $ k (csu n $ k)
+--              (\ (xs : gCoVec' A $ k (csu n $ k)) -> next k [ x <- xs.2 ] (decon A $ k (n $ k) x) [])
+--              (xs $ k)))
 
 
 zeros : Str Nat

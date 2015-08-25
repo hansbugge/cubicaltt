@@ -15,8 +15,8 @@ later k :|> k U -> U
 app (A : U) (B : A -> U) : forall k, (F : |> k ((x : A) -> B x)) (X : |> k A) -> |> k [ (x : A) <- X ] (B x)
  = [ k ] \ (F : |> k ((x : A) -> B x)) (X : |> k A) -> next k [ (x : A) <- X, (f : ((x : A) -> B x)) <- F ] (f x) []
 
-app' (A : U) (B : U) : forall k, (F : |> k ((x : A) -> B)) (X : |> k A) -> |> k B
- = app A (\ (_ : A) -> B)
+app' (A : U) (B : U) k (F : |> k ((x : A) -> B)) (X : |> k A) : |> k B
+ = next k [ x <- app A (\ (_ : A) -> B) $ k F X] x []
 
 theta1 (A : U) k : (y : |> k (Foo A $ k)) -> |> k ((|> k (Foo A $ k)) -> ((|> k A) -> A) -> A)
   = \ (y : |> k (Foo A $ k)) ->
