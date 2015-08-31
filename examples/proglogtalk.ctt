@@ -1,0 +1,87 @@
+-- Examples from Hans' talk at proglog-seminar
+-- Gothenburg, 19 aug 2016
+
+module proglogtalk where
+
+import prelude
+import nat
+
+
+data gStr k
+  = Cons (n : nat) (ns : |> k (gStr $ k))
+
+Str : U
+  = forall k, gStr $ k
+
+
+ghd k : gStr $ k -> nat
+  = split
+      Cons n _ -> n
+
+gtl k : gStr $ k -> |> k (gStr $ k)
+  = split
+      Cons _ ns -> ns
+
+hd (xs : Str) : nat
+  = ghd $ k0 (xs $ k0)
+
+tl (xs : Str) : Str
+  = prev k (gtl $ k (xs $ k))
+
+nth (xs : Str) : nat -> nat
+  = split
+      zero -> hd xs
+      suc n -> nth (tl xs) n
+
+zeros k : gStr $ k
+  = fix k (Cons zero zeros)
+
+gmap k (f : nat -> nat) : gStr $ k -> gStr $ k
+  = fix k
+    (\ (xs : gStr $ k) ->
+      Cons (f (ghd $ k xs))
+      	   (next k
+	   	 [gmap' <- gmap, xs' <- gtl $ k xs]
+	   	 gmap' xs'
+		 []))
+
+map (f : nat -> nat) (xs : Str) : Str
+  = [ k ] gmap $ k f (xs $ k)
+
+-- nats = 0 :: next(map suc) ⊛ nats : gStr
+nats : Str
+  = [ k ] fix k nats (gStr $ k)
+          (Cons zero
+	  	(next k
+		      [nats' <- nats]
+		      (gmap $ k
+		      	    (\ (n:nat) -> suc n)
+		      	    nats')
+		      []))
+
+
+gmapCommutesWithComposition k (f g : nat -> nat) : (xs : gStr $ k)
+  -> Id (gStr $ k) (gmap $ k (\ (n:nat) -> f (g n)) xs)
+     	      	   (gmap $ k f (gmap $ k g xs))
+
+  = fix k
+    (\ (xs : gStr $ k) ->
+     <i> Cons (f (g (ghd $ k xs)))
+     	      (next k
+	      	    [phi' <- gmapCommutesWithComposition, xs' <- gtl $ k xs]
+		    (phi' xs' @ i)
+		    [(i=0) -> gtl $ k (gmap $ k (\ (n:nat) -> f (g n)) xs)
+		    ,(i=1) -> gtl $ k (gmap $ k f (gmap $ k g xs))]))
+
+mapCommutesWithComposition (f g : nat -> nat) (xs : Str) :
+  Id Str (map (\ (n:nat) -> f (g n)) xs)
+     	 (map f (map g xs))
+
+  = <i> [ k ] gmapCommutesWithComposition $ k f g (xs $ k) @ i
+
+{-
+
+-}
+
+
+
