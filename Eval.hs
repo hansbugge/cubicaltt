@@ -642,7 +642,8 @@ forceN v = v
 
 bang :: Val -> Val
 bang (Ter (Next _ k xi e s) rho) = let l = fresht rho in
-     next l (lookClock k rho) (eval (pushDelSubst l (fmap (fmap bang) (evalDelSubst l rho xi)) rho) e) (evalSystem rho s)
+     next l (lookClock k rho) (eval (pushDelSubst l (fmap (fmap bang) (evalDelSubst l rho xi)) rho) e)
+                              (Map.map bang (evalSystem rho s))
 bang v@(VDFix k a f) = let t = fresht v in next t k (f `app` v) Map.empty
 bang v = v
 
