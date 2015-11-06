@@ -85,7 +85,8 @@ gtlv (A : U) k (n : |> k gCoNat $ k) : gCoVec A $ k (suc n) -> laterN $ k n (gCo
   = split
       con x -> x.2
 
-uncon (A : U) (B : U) k (n : gCoNat $ k) (f : case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * laterN $ k n (gCoVec A $ k)) n -> B) :
+uncon (A : U) (B : U) k (n : gCoNat $ k) 
+      (f : case U $ k Unit (\ (n : |> k (gCoNat $ k)) -> (_ : A ) * laterN $ k n (gCoVec A $ k)) n -> B) :
     gCoVec A $ k n -> B
   = split
      con x -> f x

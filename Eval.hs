@@ -470,11 +470,13 @@ eval rho v = case v of
     fillLine (eval rho a) (eval rho t0) (evalSystem rho ts)
   Glue a ts           -> glue (eval rho a) (evalSystem rho ts)
   GlueElem a ts       -> glueElem (eval rho a) (evalSystem rho ts)
-  Later _ k xi t | Data.List.null xi -> let l = fresht rho in VLater l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t)
+  Later _ k xi t | Data.List.null xi -> let l = fresht rho in
+                                        VLater l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t)
                  | otherwise -> Ter v rho
   Next _ k xi t s  | Just u <- maybeProj (evalSystem rho s) -> u
                    | Data.List.null xi -> let l = fresht rho in
-                      next l (lookClock k rho) (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t) (evalSystem rho s)
+                                          next l (lookClock k rho)
+                                                 (eval (pushDelSubst l (evalDelSubst l rho xi) rho) t) (evalSystem rho s)
                    | otherwise -> Ter v rho
   DFix k a t          -> VDFix (lookClock k rho) (eval rho a) (eval rho t)
   Prev k t            -> let k' = freshk rho
@@ -595,11 +597,13 @@ prev' k (VNext l k' v _) | k == k'   = VCLam k (adv l k v)
 prev' k t@(VDFix k' a f) | k == k' = VCLam k' (f `app` t)
                         | otherwise = error $ "prev: clocks do not match"
 prev' k t@(Ter (Var x) _) = error $ "prev: closure " ++ show t
-prev' k u@(VComp (VPath i (VLater l k' a)) v ts) | k == k' = comp j (VForall k (adv l k aj)) (prev' k vj) (Map.map (\ t -> prev' k (t @@ j)) ts)
+prev' k u@(VComp (VPath i (VLater l k' a)) v ts)
+    | k == k'   = comp j (VForall k (adv l k aj)) (prev' k vj) (Map.map (\ t -> prev' k (t @@ j)) ts)
     | otherwise = error $ "prev': clocks do not match"
   where
     j = fresh u
     (aj,vj) = (a,v) `swap` (i,j)
+
 prev' k t | isNeutral t = VPrev k t
 prev' k t               = error $ "prev: not neutral " ++ show t
 
