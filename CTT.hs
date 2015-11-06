@@ -132,6 +132,12 @@ type DelBind = DelBind' (Maybe Ter) Ter
 type DelSubst = [DelBind]
 type VDelSubst = [DelBind' () Val]
 
+instance Functor (DelBind' a) where
+   fmap f (DelBind (x,(y,z))) = (DelBind (x,(y,f z)))
+
+singleton :: Ident -> Val -> VDelSubst
+singleton x v = [DelBind (x,((),v))]
+
 lookDS :: Ident -> DelSubst -> Maybe Ter
 lookDS x = fmap (\ (DelBind (_,(_,t))) -> t) . find (\ (DelBind (y,(_,t))) -> x == y)
 

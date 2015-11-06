@@ -249,14 +249,16 @@ check a t = case (a,t) of
     g <- checkDelSubst l kt xi
     vxi <- evalTypingDelSubst l xi
     local (addDelDecls l vxi g) $ check va t'
-    checkSystemWith s (\ alpha b -> {- faceEnv alpha -} check (a `face` alpha) b)
-    checkSystemWith s (\ alpha b -> {- faceEnv alpha -} do
-      let -- rho' = upds (advs k vxi) rho
---          v1    = VCLam k (eval rho' t') `face` alpha
-          v1    = prev k (eval (rho `face` alpha) t)
-          v2    = prev k (eval (rho `face` alpha) b)
+    checkSystemWith s (\ alpha b -> local (faceEnv alpha) $ check (a `face` alpha) b)
+    checkSystemWith s (\ alpha b -> local (faceEnv alpha) $ do
+      rho <- asks env
+      let
+          vb    = eval rho b
+          v1    = eval (pushDelSubst l (bangS vxi)                     rho) t'
+          v2    = eval (pushDelSubst l (bangS (singleton "x" vb)) emptyEnv) (Var "x")
       unless (conv ns v1 v2) $
-        throwError $ concat ["check next: system does not align\n",show (normal ns v1),"\n\n",show (normal ns v2),"\n"] )
+        throwError $ concat ["check next: system does not align\n",show (normal ns v1),"\n\n",show (normal ns v2),"\n"
+                            ] )
     checkCompSystem (evalSystem rho s)
 
 
@@ -264,6 +266,9 @@ check a t = case (a,t) of
     v <- infer t
     unlessM (v === a) $
       throwError $ "check conv:\n" ++ "inferred: " ++ show v ++ "\n/=\n" ++ "expected: " ++ show a
+
+bangS :: VDelSubst -> VDelSubst
+bangS = fmap (fmap bang)
 
 getDelValsV :: Val -> Map Ident Val
 getDelValsV (Ter _ rho) = getDelValsE rho

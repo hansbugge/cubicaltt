@@ -243,19 +243,19 @@ etaStr (A : U) k : (xs : gStr A $ k) -> Id (gStr A $ k) (expand A $ k xs) xs
                                                                    [ (i=0) -> gtl A $ k (expand A $ k (Cons x xs))
                                                                    , (i=1) -> gtl A $ k (Cons x xs) ])))
 
-eomerge' (A : U) k : (xs ys : Str A) -> Id (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (expand A $ k (xs $ k))
-   = fix k eomerge' ((xs ys : Str A) -> Id (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (expand A $ k (xs $ k)))
-          (\ (xs ys : Str A) -> <i> Cons (ghd A $ k (xs $ k))
-                                         (next k [ phi' <- eomerge' ] (phi' (tl A xs) (tl A ys) @ i)
-                                          [ (i=0) -> gtl A $ k (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k)
-                                          , (i=1) -> gtl A $ k (expand A $ k (xs $ k)) ]))
+-- eomerge' (A : U) k : (xs ys : Str A) -> Id (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (expand A $ k (xs $ k))
+--    = fix k eomerge' ((xs ys : Str A) -> Id (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (expand A $ k (xs $ k)))
+--           (\ (xs ys : Str A) -> <i> Cons (ghd A $ k (xs $ k))
+--                                          (next k [ phi' <- eomerge' ] (phi' (tl A xs) (tl A ys) @ i)
+--                                           [ (i=0) -> gtl A $ k (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k)
+--                                           , (i=1) -> gtl A $ k (expand A $ k (xs $ k)) ]))
 
-goemerge (A : U) k (xs ys : Str A) : Id (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (xs $ k)
-  = compId (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (expand A $ k (xs $ k)) (xs $ k)
-              (eomerge' A $ k xs ys) (etaStr A $ k (xs $ k))
+-- goemerge (A : U) k (xs ys : Str A) : Id (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (xs $ k)
+--   = compId (gStr A $ k) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k)) $ k) (expand A $ k (xs $ k)) (xs $ k)
+--               (eomerge' A $ k xs ys) (etaStr A $ k (xs $ k))
 
-oemerge (A : U) (xs ys : Str A) : Id (Str A) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k))) xs
-  = <i> [ k ] goemerge A $ k xs ys @ i
+-- oemerge (A : U) (xs ys : Str A) : Id (Str A) (everyother A ([ k ] merge A $ k (xs $ k) (ys $ k))) xs
+--   = <i> [ k ] goemerge A $ k xs ys @ i
 
 -- tlcv (A : U) (n : CoNat) (xs : CoVec A (csu n)) : CoVec A n
 --   = kcon A n (prev k (uncon A (|> k (gCoVec' A $ k (n $ k))) $ k (csu n $ k)
@@ -280,12 +280,12 @@ hasZeros : (n : Nat) -> isNth Nat ze zeros n
      ze -> <i> ze
      su n -> hasZeros n
 
-transportExample (n : Nat) : isNth Nat ze (everyother Nat ([ k ] merge Nat $ k (zeros $ k) (zeros $ k))) n
-  = transport (<i> isNth Nat ze (oemerge Nat zeros zeros @ -i) n) (hasZeros n)
+-- transportExample (n : Nat) : isNth Nat ze (everyother Nat ([ k ] merge Nat $ k (zeros $ k) (zeros $ k))) n
+--   = transport (<i> isNth Nat ze (oemerge Nat zeros zeros @ -i) n) (hasZeros n)
 
-testComp : Id (Str Nat) zeros zeros
-  = <i> comp (<_> Str Nat) (oemerge Nat zeros zeros @ -i)
-               [ (i=1) -> oemerge Nat zeros zeros, (i=0) -> <_> zeros ]
+-- testComp : Id (Str Nat) zeros zeros
+--   = <i> comp (<_> Str Nat) (oemerge Nat zeros zeros @ -i)
+--                [ (i=1) -> oemerge Nat zeros zeros, (i=0) -> <_> zeros ]
 
-testCompHead : Id Nat ze ze
-  = <i> hd Nat (testComp @ i)
+-- testCompHead : Id Nat ze ze
+--   = <i> hd Nat (testComp @ i)

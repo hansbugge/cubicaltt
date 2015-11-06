@@ -119,8 +119,8 @@ loop flags f names tenv = do
     Just str'  ->
       let (msg,str,mod) = case str' of
             (':':'n':' ':str) ->
-              ("NORMEVAL: ",str,E.normal [])
-            str -> ("EVAL: ",str,id)
+              ("NORMEVAL: ",str,E.normal [] . E.bang)
+            str -> ("EVAL: ",str,E.bang)
       in case pExp (lexer str) of
       Bad err -> outputStrLn ("Parse error: " ++ err) >> loop flags f names tenv
       Ok  exp ->
@@ -134,7 +134,7 @@ loop flags f names tenv = do
                            loop flags f names tenv
             Right _  -> do
               start <- liftIO getCurrentTime
-              let e = mod $ E.eval (TC.env tenv) body
+              let e = mod $ E.bang $ E.eval (TC.env tenv) body
 
               -- Let's not crash if the evaluation raises an error:
               liftIO $ catch (putStrLn (msg ++ show e))

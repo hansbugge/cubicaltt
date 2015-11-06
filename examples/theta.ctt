@@ -41,5 +41,10 @@ data Unit = unit
 
 data gStr (A : U) k = Cons (x : A) (xs : |> k (gStr A $ k))
 
+
+gtl (A : U) k : gStr A $ k -> |> k (gStr A $ k)
+ = split
+     Cons x xs -> xs
+
 zeros k : gStr Unit $ k
     =  deffix (gStr Unit $ k) $ k (\ (xs : |> k (gStr Unit $ k)) -> (Cons unit xs))
