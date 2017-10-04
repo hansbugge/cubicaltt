@@ -20,6 +20,18 @@ J (A : U) (a : A) (C : (x : A) -> Id A a x -> U)
     subst (singl A a) T (a, refl A a) (x, p) (contrSingl A a x p) d
       where T (z : singl A a) : U = C (z.1) (z.2)
 
+substEq (A : U) (P : A -> U) (a : A) (e : P a)
+  : Id (P a) e (subst A P a a (refl A a) e) =
+  fill (<i> P a) e []
+
+JEq (A : U) (a : A) (C : (x : A) -> Id A a x -> U) (d : C a (refl A a))
+  : Id (C a (refl A a)) d (J A a C d a (refl A a)) =
+  substEq (singl A a) T (a, refl A a) d
+    where T (z : singl A a) : U = C (z.1) (z.2)
+
+J_refl (A : U) (a : A) (C : (x : A) -> Id A a x -> U)
+       (d : C a (refl A a)) : Id (C a (refl A a)) (J A a C d a (refl A a)) d
+ = <i> JEq A a C d @ -i
 {-    Extensionality for later
 ------------------------------------ -}
 
@@ -37,3 +49,42 @@ nextext' (A : U) (a b : A) (p : IdP (<_> |> A) (next a) (next b)) : |> (Id A a b
       (next (<_> a))
       (next b)
       p
+
+code (A : U) (a b : |> A) (p : Id (|> A) a b)
+     : |> [a' <- a, b' <- b] (Id A a' b')
+ = J  (|> A)
+      a
+      (\ (x : |> A) (_ : Id (|> A) a x) ->
+            |> [a' <- a, x' <- x] (Id A a' x'))
+      (next [ a' <- a] (<_> a'))
+      b
+      p
+
+decode (A : U) (a b : |> A) (p : |> [a' <- a, b' <- b] (Id A a' b'))
+       : Id (|> A) a b
+ = <i> next [p' <- p] (p' @ i)
+
+
+
+decode_code (A : U) (a b : |> A) (p : Id (|> A) a b)
+            : Id (Id (|> A) a b) (decode A a b (code A a b p)) p
+    = J (|> A) a
+        (\ (b : |> A) (p : Id (|> A) a b) -> Id (Id (|> A) a b) (decode A a b (code A a b p)) p)
+        (<i j> next [p' <- code_refl @ i ] (p' @ j))
+        b
+        p
+ where
+  code_refl : Id (|> [a' <- a, x' <- a] (Id A a' x'))
+         (code A a a (refl (|> A) a))
+         (next [ a' <- a] (<_> a'))
+    = J_refl (|> A) a C (next [ a' <- a] (<_> a'))
+   where
+       C (b : |> A) (_ : Id (|> A) a b) : U
+         = |> [a' <- a, x' <- b] (Id A a' x')
+
+code_decode (A : U) (a b : |> A) (p : |> [a' <- a, b' <- b] (Id A a' b')) :
+            Id (|> [a' <- a, b' <- b] (Id A a' b'))
+               (code A a b (decode A a b p)) p
+ = <i> comp (<j> |> [a' <- a, p' <- p] Id A a' (p' @ j))
+            (next [a' <- a] (<_> a'))
+            [ (i = 1) -> <j> next [p' <- p] (<k> p' @ (j /\ k)) ]
